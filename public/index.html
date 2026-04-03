@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedAssist AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --indigo:       #6366f1;
+      --indigo-dark:  #4f46e5;
+      --blue:         #3b82f6;
+      --sky:          #0ea5e9;
+      --surface:      #151c2c;
+      --bg:           #0d1117;
+      --bg2:          #111827;
+      --border:       #1e2d45;
+      --text:         #e8edf5;
+      --muted:        #64748b;
+      --sidebar-w:    260px;
+      --radius-lg:    16px;
+      --radius-md:    12px;
+      --radius-sm:    8px;
+      --shadow-sm:    0 1px 3px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.2);
+      --shadow-md:    0 4px 16px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.2);
+      --shadow-lg:    0 12px 40px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ─────────────────────── SIDEBAR ─────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 60%, #1e293b 100%);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sidebar::before {
+      content: '';
+      position: absolute;
+      top: -80px; left: -80px;
+      width: 260px; height: 260px;
+      background: radial-gradient(circle, rgba(99,102,241,.25) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .sidebar::after {
+      content: '';
+      position: absolute;
+      bottom: 60px; right: -60px;
+      width: 200px; height: 200px;
+      background: radial-gradient(circle, rgba(59,130,246,.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .logo {
+      padding: 28px 22px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      position: relative; z-index: 1;
+    }
+
+    .logo-mark {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--indigo), var(--sky));
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 4px 12px rgba(99,102,241,.4);
+      flex-shrink: 0;
+    }
+
+    .logo-name { color: #fff; font-size: 17px; font-weight: 800; letter-spacing: -.3px; }
+    .logo-tag  { color: #7c86a2; font-size: 11px; font-weight: 500; margin-top: 1px; }
+
+    .nav { padding: 18px 14px; flex: 1; position: relative; z-index: 1; }
+    .nav-section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: #3d4a6b;
+      padding: 0 8px; margin-bottom: 8px;
+    }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 12px;
+      border-radius: var(--radius-md);
+      color: #8892a8;
+      cursor: pointer;
+      font-size: 14px; font-weight: 500;
+      transition: all .2s;
+      margin-bottom: 2px;
+      position: relative;
+      user-select: none;
+    }
+
+    .nav-item:hover { color: #fff; background: rgba(255,255,255,.06); }
+
+    .nav-item.active {
+      color: #fff;
+      background: linear-gradient(90deg, rgba(99,102,241,.25), rgba(99,102,241,.05));
+      border: 1px solid rgba(99,102,241,.3);
+    }
+
+    .nav-item.active::before {
+      content: '';
+      position: absolute; left: 0; top: 20%; bottom: 20%;
+      width: 3px;
+      background: linear-gradient(180deg, var(--indigo), var(--sky));
+      border-radius: 0 3px 3px 0;
+    }
+
+    .nav-icon {
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      background: rgba(255,255,255,.05);
+      flex-shrink: 0;
+    }
+
+    .nav-item.active .nav-icon { background: rgba(99,102,241,.25); }
+
+    .new-chat {
+      margin: 0 14px;
+      padding: 11px 16px;
+      background: linear-gradient(135deg, var(--indigo), var(--sky));
+      border: none;
+      border-radius: var(--radius-md);
+      color: #fff;
+      font-size: 13.5px; font-weight: 600;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: opacity .2s, transform .2s;
+      box-shadow: 0 4px 14px rgba(99,102,241,.4);
+      position: relative; z-index: 1;
+    }
+
+    .new-chat:hover { opacity: .9; transform: translateY(-1px); }
+    .new-chat:active { transform: translateY(0); }
+
+    .sidebar-footer {
+      padding: 18px 22px;
+      border-top: 1px solid rgba(255,255,255,.06);
+      display: flex; align-items: center; gap: 10px;
+      position: relative; z-index: 1;
+    }
+
+    .ai-badge {
+      font-size: 11px;
+      background: rgba(99,102,241,.2);
+      color: #a5b4fc;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 500;
+      border: 1px solid rgba(99,102,241,.3);
+    }
+
+    /* ─────────────────────── MAIN ─────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+      background-image:
+        radial-gradient(circle at 20% 10%, rgba(99,102,241,.07) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(14,165,233,.07) 0%, transparent 50%);
+    }
+
+    .topbar {
+      background: rgba(13,17,23,.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .topbar-left h1 { font-size: 18px; font-weight: 800; letter-spacing: -.3px; }
+    .topbar-left p  { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    .live-badge {
+      display: flex; align-items: center; gap: 7px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px; font-weight: 600; color: #16a34a;
+    }
+
+    .pulse {
+      width: 8px; height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,.4); }
+      50%       { box-shadow: 0 0 0 6px rgba(34,197,94,.0); }
+    }
+
+    /* ─────────────────────── PAGES ─────────────────────── */
+    .page { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+    .page.active { display: flex; }
+
+    /* ─────────────────────── CHAT ─────────────────────── */
+    .chat-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      scroll-behavior: smooth;
+    }
+
+    .chat-body::-webkit-scrollbar { width: 5px; }
+    .chat-body::-webkit-scrollbar-thumb { background: #d1d9f0; border-radius: 3px; }
+
+    /* Welcome screen */
+    .welcome {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      flex: 1; text-align: center; gap: 10px;
+      padding: 48px 24px;
+    }
+
+    .welcome-glow {
+      width: 88px; height: 88px;
+      background: linear-gradient(135deg, var(--indigo), var(--sky));
+      border-radius: 28px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 42px;
+      box-shadow: 0 8px 32px rgba(99,102,241,.35);
+      margin-bottom: 6px;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-6px); }
+    }
+
+    .welcome h2 {
+      font-size: 26px; font-weight: 800; letter-spacing: -.4px;
+      background: linear-gradient(135deg, var(--indigo), var(--sky));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
+    .welcome > p { font-size: 15px; color: var(--muted); max-width: 400px; line-height: 1.7; }
+
+    .chips {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      justify-content: center; margin-top: 10px;
+    }
+
+    .chip {
+      padding: 9px 18px;
+      background: #151c2c;
+      border: 1.5px solid var(--border);
+      border-radius: 22px;
+      font-size: 13px; font-weight: 500;
+      cursor: pointer;
+      transition: all .2s;
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .chip:hover {
+      background: var(--indigo); color: #fff;
+      border-color: var(--indigo);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(99,102,241,.3);
+    }
+
+    /* Messages */
+    .msg-row { display: flex; gap: 12px; max-width: 800px; animation: fadeUp .3s ease; }
+    .msg-row.user { align-self: flex-end; flex-direction: row-reverse; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .avatar {
+      width: 38px; height: 38px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+
+    .avatar.ai {
+      background: linear-gradient(135deg, var(--indigo), var(--sky));
+      box-shadow: 0 4px 10px rgba(99,102,241,.3);
+    }
+
+    .avatar.user { background: #f1f5f9; }
+
+    .bubble {
+      padding: 14px 18px;
+      border-radius: var(--radius-lg);
+      font-size: 14.5px; line-height: 1.65;
+      max-width: 620px;
+    }
+
+    .bubble.ai {
+      background: #1a2340;
+      border: 1px solid var(--border);
+      border-top-left-radius: 4px;
+      box-shadow: var(--shadow-sm);
+      color: var(--text);
+    }
+
+    .bubble.user {
+      background: linear-gradient(135deg, var(--indigo), var(--sky));
+      color: #fff;
+      border-top-right-radius: 4px;
+      box-shadow: 0 6px 20px rgba(99,102,241,.3);
+    }
+
+    .bubble.ai p  { margin-bottom: 8px; }
+    .bubble.ai p:last-child { margin-bottom: 0; }
+    .bubble.ai ul, .bubble.ai ol { padding-left: 20px; margin: 8px 0; }
+    .bubble.ai li { margin-bottom: 4px; }
+    .bubble.ai strong { font-weight: 700; color: var(--indigo); }
+
+    .bubble.ai table {
+      width: 100%; border-collapse: collapse;
+      margin: 10px 0; font-size: 13px;
+      border-radius: 8px; overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .bubble.ai th {
+      background: #f8faff; padding: 8px 12px;
+      text-align: left; font-weight: 700;
+      border-bottom: 2px solid var(--border);
+      font-size: 12px; text-transform: uppercase;
+      letter-spacing: .05em; color: var(--muted);
+    }
+
+    .bubble.ai td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    .bubble.ai tr:last-child td { border-bottom: none; }
+
+    /* Typing */
+    .typing-row { display: flex; gap: 12px; align-items: center; animation: fadeUp .3s ease; }
+    .typing-dots {
+      background: #1a2340; border: 1px solid var(--border);
+      border-radius: var(--radius-lg); border-top-left-radius: 4px;
+      padding: 14px 18px;
+      display: flex; gap: 5px; align-items: center;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .dot {
+      width: 7px; height: 7px;
+      background: #c7d0e8; border-radius: 50%;
+      animation: bounce .8s infinite;
+    }
+
+    .dot:nth-child(2) { animation-delay: .15s; }
+    .dot:nth-child(3) { animation-delay: .30s; }
+
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30%            { transform: translateY(-7px); }
+    }
+
+    /* Input bar */
+    .chat-input-bar {
+      padding: 16px 32px 22px;
+      background: rgba(13,17,23,.85);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+    }
+
+    .input-wrap {
+      display: flex; align-items: flex-end; gap: 10px;
+      background: #151c2c;
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 12px 12px 18px;
+      transition: border-color .2s, box-shadow .2s;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .input-wrap:focus-within {
+      border-color: var(--indigo);
+      box-shadow: 0 0 0 3px rgba(99,102,241,.1), var(--shadow-sm);
+    }
+
+    #chat-input {
+      flex: 1; border: none; background: transparent;
+      outline: none; font-size: 14.5px; resize: none;
+      max-height: 140px; font-family: 'Inter', sans-serif;
+      color: var(--text); line-height: 1.5;
+    }
+
+    #chat-input::placeholder { color: #a8b4cc; }
+
+    .send-btn {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--indigo), var(--sky));
+      border: none; border-radius: 12px;
+      color: #fff; cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: all .2s;
+      box-shadow: 0 4px 12px rgba(99,102,241,.4);
+    }
+
+    .send-btn:hover  { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(99,102,241,.5); }
+    .send-btn:active { transform: translateY(0); }
+    .send-btn:disabled { background: #e2e8f0; box-shadow: none; cursor: default; transform: none; }
+
+    .input-hint { font-size: 12px; color: var(--muted); margin-top: 8px; text-align: center; }
+
+    /* ─────────────────────── REPORT PAGE ─────────────────────── */
+    .report-layout {
+      flex: 1; display: flex; overflow: hidden;
+    }
+
+    .report-sidebar {
+      width: 320px; flex-shrink: 0;
+      background: rgba(13,17,23,.85);
+      backdrop-filter: blur(12px);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+      padding: 24px 20px;
+      gap: 22px;
+    }
+
+    .report-sidebar::-webkit-scrollbar { width: 4px; }
+    .report-sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .section-label {
+      font-size: 11px; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 8px;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed #1e2d45;
+      border-radius: var(--radius-lg);
+      padding: 28px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      background: #0d1117;
+      position: relative;
+    }
+
+    .drop-zone:hover, .drop-zone.over {
+      border-color: var(--indigo);
+      background: #13172a;
+    }
+
+    .drop-zone.has-file { border-color: #22c55e; background: #0a1f12; border-style: solid; }
+
+    .dz-icon {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, rgba(99,102,241,.12), rgba(14,165,233,.12));
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; margin: 0 auto 10px;
+    }
+
+    .dz-title { font-size: 14px; font-weight: 600; }
+    .dz-sub   { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    .dz-formats {
+      display: flex; gap: 6px; justify-content: center; margin-top: 10px;
+    }
+
+    .fmt-tag {
+      font-size: 11px; font-weight: 600;
+      background: rgba(99,102,241,.1); color: var(--indigo);
+      padding: 3px 8px; border-radius: 5px;
+    }
+
+    .file-pill {
+      display: none; align-items: center; gap: 10px;
+      background: #0a1f12; border: 1px solid #166534;
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 13px;
+    }
+
+    .file-pill.show { display: flex; }
+    .fp-name { font-weight: 600; color: #15803d; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fp-remove { cursor: pointer; color: #94a3b8; font-size: 15px; flex-shrink: 0; }
+    .fp-remove:hover { color: #ef4444; }
+
+    .or-divider {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12px; color: var(--muted);
+    }
+
+    .or-divider::before, .or-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    .field-group { display: flex; flex-direction: column; gap: 6px; }
+
+    .field-input {
+      width: 100%; padding: 11px 14px;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 14px; outline: none; font-family: 'Inter', sans-serif;
+      color: var(--text); transition: border-color .2s, box-shadow .2s;
+      background: #0d1117;
+    }
+
+    .field-input:focus {
+      border-color: var(--indigo);
+      box-shadow: 0 0 0 3px rgba(99,102,241,.08);
+    }
+
+    .field-input::placeholder { color: #a8b4cc; }
+
+    textarea.field-input { resize: vertical; min-height: 88px; line-height: 1.5; }
+
+    .gen-btn {
+      width: 100%; padding: 13px;
+      background: linear-gradient(135deg, var(--indigo), var(--sky));
+      border: none; border-radius: var(--radius-md);
+      color: #fff; font-size: 15px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all .2s;
+      box-shadow: 0 6px 20px rgba(99,102,241,.4);
+      letter-spacing: -.2px;
+    }
+
+    .gen-btn:hover    { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(99,102,241,.45); }
+    .gen-btn:active   { transform: translateY(0); }
+    .gen-btn:disabled { background: linear-gradient(135deg,#a5b4fc,#7dd3fc); box-shadow: none; cursor: default; transform: none; }
+
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+
+    .gen-btn.loading .spinner  { display: block; }
+    .gen-btn.loading .btn-text { display: none; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    input[type="file"] { display: none; }
+
+    /* Report output */
+    .report-main {
+      flex: 1; overflow-y: auto; padding: 32px 36px;
+      background: var(--bg);
+      background-image:
+        radial-gradient(circle at 10% 20%, rgba(99,102,241,.06) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(14,165,233,.06) 0%, transparent 40%);
+    }
+
+    .report-main::-webkit-scrollbar { width: 5px; }
+    .report-main::-webkit-scrollbar-thumb { background: #d1d9f0; border-radius: 3px; }
+
+    .empty-state {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; gap: 10px;
+      text-align: center; color: var(--muted);
+    }
+
+    .empty-icon {
+      width: 80px; height: 80px;
+      background: linear-gradient(135deg, rgba(99,102,241,.1), rgba(14,165,233,.1));
+      border-radius: 24px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 38px; margin-bottom: 8px;
+    }
+
+    .empty-state h3 { font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -.3px; }
+    .empty-state p  { font-size: 14px; max-width: 300px; line-height: 1.6; }
+
+    /* Report rendered */
+    .report-card {
+      background: #111827;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      max-width: 900px;
+      animation: fadeUp .4s ease;
+    }
+
+    .report-card-header {
+      background: linear-gradient(135deg, #0f172a, #1e1b4b);
+      padding: 24px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .rch-left h2 {
+      color: #fff; font-size: 19px; font-weight: 800;
+      letter-spacing: -.3px;
+    }
+
+    .rch-left p { color: #7c86a2; font-size: 13px; margin-top: 4px; }
+
+    .rch-right { display: flex; gap: 8px; }
+
+    .rch-btn {
+      padding: 8px 14px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: var(--radius-sm);
+      color: #a5b4fc; font-size: 13px; font-weight: 500;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      transition: all .15s; font-family: 'Inter', sans-serif;
+    }
+
+    .rch-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
+
+    .report-card-body { padding: 28px; }
+
+    /* Metric cards */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .metric-card {
+      background: #111827;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+
+    .metric-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4a5568; }
+    .metric-value { font-size: 22px; font-weight: 800; letter-spacing: -.5px; color: var(--text); }
+    .metric-icon  { font-size: 22px; margin-bottom: 2px; }
+
+    .metric-card.blue   .metric-value { color: var(--indigo); }
+    .metric-card.green  .metric-value { color: #16a34a; }
+    .metric-card.orange .metric-value { color: #d97706; }
+    .metric-card.sky    .metric-value { color: var(--sky); }
+
+    /* Markdown content */
+    .md-content h1,
+    .md-content h2,
+    .md-content h3 { color: var(--text); font-weight: 800; letter-spacing: -.3px; }
+
+    .md-content h1 { font-size: 21px; margin: 0 0 16px; }
+    .md-content h2 {
+      font-size: 16px; margin: 28px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+      color: #e8edf5;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .md-content h3 { font-size: 14px; margin: 20px 0 8px; }
+
+    .md-content p  { font-size: 14.5px; line-height: 1.75; color: #94a3b8; margin-bottom: 12px; }
+    .md-content ul, .md-content ol { padding-left: 20px; margin-bottom: 12px; }
+    .md-content li { font-size: 14.5px; line-height: 1.75; color: #94a3b8; margin-bottom: 4px; }
+    .md-content strong { font-weight: 700; color: var(--text); }
+
+    .md-content table {
+      width: 100%; border-collapse: collapse;
+      margin: 16px 0; font-size: 13.5px;
+      border-radius: var(--radius-md); overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .md-content th {
+      background: linear-gradient(90deg, #0f172a, #1e1b4b);
+      color: #fff; padding: 12px 16px;
+      text-align: left; font-weight: 700;
+      font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    }
+
+    .md-content td { padding: 11px 16px; border-bottom: 1px solid var(--border); color: #cbd5e1; }
+    .md-content tr:last-child td { border-bottom: none; }
+    .md-content tr:nth-child(even) td { background: #111827; }
+    .md-content tr:hover td { background: #13172a; transition: background .15s; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #0f172a; color: #fff;
+      padding: 13px 20px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 500;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(80px); opacity: 0;
+      transition: all .35s cubic-bezier(.34,1.56,.64,1);
+      z-index: 9999; display: flex; align-items: center; gap: 8px;
+    }
+
+    .toast.show  { transform: translateY(0); opacity: 1; }
+    .toast.error { background: #ef4444; }
+    .toast.ok    { background: #16a34a; }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">🏥</div>
+    <div>
+      <div class="logo-name">MedAssist AI</div>
+      <div class="logo-tag">Health Intelligence Platform</div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <div class="nav-section-label">Menu</div>
+
+    <div class="nav-item active" data-page="chat">
+      <div class="nav-icon">💬</div>
+      Chat Assistant
+    </div>
+
+    <div class="nav-item" data-page="report">
+      <div class="nav-icon">📊</div>
+      Sales Reports
+    </div>
+  </nav>
+
+  <button class="new-chat" id="new-chat-btn">
+    ✏️ &nbsp;New Conversation
+  </button>
+
+  <div class="sidebar-footer">
+    <div class="ai-badge">Llama 3.3 · Groq</div>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- ─── Chat Page ─── -->
+  <div class="page active" id="page-chat">
+    <div class="topbar">
+      <div class="topbar-left">
+        <h1>Chat Assistant</h1>
+        <p>Ask any health-related question</p>
+      </div>
+      <div class="live-badge"><div class="pulse"></div> Live</div>
+    </div>
+
+    <div class="chat-body" id="chat-body">
+      <div class="welcome" id="welcome">
+        <div class="welcome-glow">🩺</div>
+        <h2>How can I help you?</h2>
+        <p>I'm your AI-powered medical assistant. Ask me about symptoms, medications, tests, or anything health-related.</p>
+        <div class="chips">
+          <div class="chip" onclick="sendChip(this)">What are symptoms of diabetes?</div>
+          <div class="chip" onclick="sendChip(this)">How to lower blood pressure naturally?</div>
+          <div class="chip" onclick="sendChip(this)">What is a lipid profile test?</div>
+          <div class="chip" onclick="sendChip(this)">When should I see a cardiologist?</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-bar">
+      <div class="input-wrap">
+        <textarea id="chat-input" rows="1" placeholder="Ask a health question…"></textarea>
+        <button class="send-btn" id="send-btn">➤</button>
+      </div>
+      <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
+    </div>
+  </div>
+
+  <!-- ─── Report Page ─── -->
+  <div class="page" id="page-report">
+    <div class="topbar">
+      <div class="topbar-left">
+        <h1>AB4 Sales Reports</h1>
+        <p>Upload data and generate AI-powered insights</p>
+      </div>
+    </div>
+
+    <div class="report-layout">
+
+      <!-- Left panel -->
+      <div class="report-sidebar">
+
+        <div>
+          <div class="section-label">Upload File</div>
+          <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+            <div class="dz-icon">📁</div>
+            <div class="dz-title">Drop file here or click to browse</div>
+            <div class="dz-sub">Supported formats:</div>
+            <div class="dz-formats">
+              <span class="fmt-tag">CSV</span>
+              <span class="fmt-tag">XLSX</span>
+              <span class="fmt-tag">PDF</span>
+            </div>
+          </div>
+          <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.pdf" />
+        </div>
+
+        <div class="file-pill" id="file-pill">
+          <span>📄</span>
+          <span class="fp-name" id="fp-name"></span>
+          <span class="fp-remove" id="fp-remove">✕</span>
+        </div>
+
+        <div class="or-divider">or use Google Sheet</div>
+
+        <div class="field-group">
+          <div class="section-label">Google Sheet URL</div>
+          <input class="field-input" type="text" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/…" />
+        </div>
+
+        <div class="field-group">
+          <div class="section-label">Report Prompt</div>
+          <textarea class="field-input" id="report-prompt" placeholder="e.g. Generate a full AB4 sales report with doctor breakdown and top services by revenue"></textarea>
+        </div>
+
+        <button class="gen-btn" id="gen-btn" onclick="generateReport()">
+          <div class="spinner"></div>
+          <span class="btn-text">✨ Generate Report</span>
+        </button>
+
+      </div>
+
+      <!-- Report output -->
+      <div class="report-main" id="report-main">
+        <div class="empty-state">
+          <div class="empty-icon">📈</div>
+          <h3>No report generated yet</h3>
+          <p>Upload your sales file or paste a Google Sheet URL, add a prompt, and click Generate.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── State ──
+  let sessionId = null;
+  let selectedFile = null;
+
+  // ── Navigation ──
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      item.classList.add('active');
+      document.getElementById('page-' + item.dataset.page).classList.add('active');
+    });
+  });
+
+  // ── Toast ──
+  function toast(msg, type = '') {
+    const el = document.getElementById('toast');
+    el.innerHTML = (type === 'error' ? '⚠️ ' : type === 'ok' ? '✅ ' : 'ℹ️ ') + msg;
+    el.className = 'toast show' + (type ? ' ' + type : '');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.className = 'toast', 3200);
+  }
+
+  // ── Chat ──
+  const chatBody  = document.getElementById('chat-body');
+  const chatInput = document.getElementById('chat-input');
+  const sendBtn   = document.getElementById('send-btn');
+
+  chatInput.addEventListener('input', () => {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 140) + 'px';
+  });
+
+  chatInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  sendBtn.addEventListener('click', sendMessage);
+
+  document.getElementById('new-chat-btn').addEventListener('click', resetChat);
+
+  function resetChat() {
+    sessionId = null;
+    chatBody.innerHTML = `
+      <div class="welcome" id="welcome">
+        <div class="welcome-glow">🩺</div>
+        <h2>How can I help you?</h2>
+        <p>I'm your AI-powered medical assistant. Ask me about symptoms, medications, tests, or anything health-related.</p>
+        <div class="chips">
+          <div class="chip" onclick="sendChip(this)">What are symptoms of diabetes?</div>
+          <div class="chip" onclick="sendChip(this)">How to lower blood pressure naturally?</div>
+          <div class="chip" onclick="sendChip(this)">What is a lipid profile test?</div>
+          <div class="chip" onclick="sendChip(this)">When should I see a cardiologist?</div>
+        </div>
+      </div>`;
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelector('[data-page="chat"]').classList.add('active');
+    document.getElementById('page-chat').classList.add('active');
+  }
+
+  function sendChip(el) { chatInput.value = el.textContent; sendMessage(); }
+
+  function addMessage(role, html) {
+    const welcome = document.getElementById('welcome');
+    if (welcome) welcome.remove();
+
+    const row    = document.createElement('div');
+    row.className = 'msg-row ' + role;
+
+    const av = document.createElement('div');
+    av.className = 'avatar ' + (role === 'user' ? 'user' : 'ai');
+    av.textContent = role === 'user' ? '👤' : '🤖';
+
+    const bub = document.createElement('div');
+    bub.className = 'bubble ' + (role === 'user' ? 'user' : 'ai');
+    if (role === 'user') bub.textContent = html;
+    else bub.innerHTML = marked.parse(html);
+
+    row.appendChild(av);
+    row.appendChild(bub);
+    chatBody.appendChild(row);
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  function showTyping() {
+    const welcome = document.getElementById('welcome');
+    if (welcome) welcome.remove();
+    chatBody.insertAdjacentHTML('beforeend', `
+      <div class="typing-row" id="typing">
+        <div class="avatar ai">🤖</div>
+        <div class="typing-dots">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        </div>
+      </div>`);
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  function removeTyping() {
+    const el = document.getElementById('typing');
+    if (el) el.remove();
+  }
+
+  async function sendMessage() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+    sendBtn.disabled = true;
+    addMessage('user', text);
+    showTyping();
+
+    try {
+      const res  = await fetch('/api/chat/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, message: text }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      sessionId = data.sessionId;
+      removeTyping();
+      addMessage('ai', data.reply);
+    } catch (err) {
+      removeTyping();
+      addMessage('ai', '⚠️ ' + (err.message || 'Something went wrong. Please try again.'));
+      toast(err.message, 'error');
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+
+  // ── File upload ──
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const filePill  = document.getElementById('file-pill');
+  const fpName    = document.getElementById('fp-name');
+
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
+  dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('over');
+    if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+  });
+
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+
+  function setFile(file) {
+    selectedFile = file;
+    fpName.textContent = file.name;
+    filePill.classList.add('show');
+    dropZone.classList.add('has-file');
+    dropZone.querySelector('.dz-title').textContent = '✅ File ready';
+    document.getElementById('sheet-url').value = '';
+  }
+
+  document.getElementById('fp-remove').addEventListener('click', e => {
+    e.stopPropagation();
+    selectedFile = null;
+    fileInput.value = '';
+    filePill.classList.remove('show');
+    dropZone.classList.remove('has-file');
+    dropZone.querySelector('.dz-title').textContent = 'Drop file here or click to browse';
+  });
+
+  // ── Generate report ──
+  async function generateReport() {
+    const prompt   = document.getElementById('report-prompt').value.trim();
+    const sheetUrl = document.getElementById('sheet-url').value.trim();
+    const btn      = document.getElementById('gen-btn');
+
+    if (!prompt)                    { toast('Please enter a report prompt', 'error'); return; }
+    if (!selectedFile && !sheetUrl) { toast('Please upload a file or paste a Google Sheet URL', 'error'); return; }
+
+    btn.classList.add('loading');
+    btn.disabled = true;
+
+    try {
+      let data;
+      if (selectedFile) {
+        const form = new FormData();
+        form.append('file', selectedFile);
+        form.append('prompt', prompt);
+        const res = await fetch('/api/report/upload', { method: 'POST', body: form });
+        data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+      } else {
+        const res = await fetch('/api/report/google-sheet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: sheetUrl, prompt }),
+        });
+        data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+      }
+      renderReport(data.content, data.reportId);
+      toast('Report generated successfully!', 'ok');
+    } catch (err) {
+      toast(err.message || 'Failed to generate report', 'error');
+    } finally {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+  }
+
+  function extractMetrics(content) {
+    const metrics = [];
+    const patterns = [
+      { re: /unique patients[:\s*]+(\d[\d,]*)/i,   label: 'Unique Patients', icon: '👥', cls: 'blue' },
+      { re: /total services[:\s*]+(\d[\d,]*)/i,     label: 'Total Services',  icon: '🔬', cls: 'sky' },
+      { re: /total revenue[:\s*₦]+([\d,]+(?:\.\d+)?)/i, label: 'Total Revenue', icon: '💰', cls: 'green', prefix: '₦' },
+      { re: /unique doctors[:\s*]+(\d[\d,]*)/i,     label: 'Unique Doctors',  icon: '👨‍⚕️', cls: 'orange' },
+    ];
+    for (const p of patterns) {
+      const m = content.match(p.re);
+      if (m) metrics.push({ label: p.label, value: (p.prefix || '') + m[1], icon: p.icon, cls: p.cls });
+    }
+    return metrics;
+  }
+
+  function renderReport(content, reportId) {
+    const now = new Date().toLocaleString('en-NG', {
+      day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+
+    const metrics = extractMetrics(content);
+    const metricHTML = metrics.length ? `
+      <div class="metric-grid">
+        ${metrics.map(m => `
+          <div class="metric-card ${m.cls}">
+            <div class="metric-icon">${m.icon}</div>
+            <div class="metric-label">${m.label}</div>
+            <div class="metric-value">${m.value}</div>
+          </div>`).join('')}
+      </div>` : '';
+
+    document.getElementById('report-main').innerHTML = `
+      <div class="report-card">
+        <div class="report-card-header">
+          <div class="rch-left">
+            <h2>AB4 Sales Report</h2>
+            <p>Generated ${now} &nbsp;·&nbsp; ID: ${reportId.slice(0,8)}…</p>
+          </div>
+          <div class="rch-right">
+            <button class="rch-btn" onclick="copyReport()">📋 Copy</button>
+            <button class="rch-btn" onclick="window.print()">🖨️ Print</button>
+          </div>
+        </div>
+        <div class="report-card-body">
+          ${metricHTML}
+          <div class="md-content" id="md-body">${marked.parse(content)}</div>
+        </div>
+      </div>`;
+  }
+
+  function copyReport() {
+    const el = document.getElementById('md-body');
+    if (!el) return;
+    navigator.clipboard.writeText(el.innerText)
+      .then(() => toast('Report copied to clipboard!', 'ok'));
+  }
+</script>
+</body>
+</html>

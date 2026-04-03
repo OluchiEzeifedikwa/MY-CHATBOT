@@ -1,0 +1,37 @@
+generator client {
+  provider   = "prisma-client-js"
+  output     = "../node_modules/.prisma/client"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now()) @map("created_at")
+  messages  Message[]
+
+  @@map("sessions")
+}
+
+model Report {
+  id        String   @id @default(uuid())
+  prompt    String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("reports")
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  sessionId String   @map("session_id")
+  role      String   // "user" or "assistant"
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}

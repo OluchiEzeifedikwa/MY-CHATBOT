@@ -1,4 +1,4 @@
-# MedAssist AI
+# MeshAI
 
 A full-stack AI platform with two features:
 - **Chat Assistant** — medical Q&A chatbot powered by Llama 3.3

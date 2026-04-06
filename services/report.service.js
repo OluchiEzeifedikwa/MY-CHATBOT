@@ -4,21 +4,12 @@ import { parseCSV } from '../lib/parsers/csv.parser.js';
 import { parseExcel } from '../lib/parsers/excel.parser.js';
 import { parsePDF } from '../lib/parsers/pdf.parser.js';
 import { parseGoogleSheet } from '../lib/parsers/googlesheet.parser.js';
+import { fillTemplate, detectTemplateMonth } from '../lib/pptxTemplateEngine.js';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-const SYSTEM_PROMPT = `You are a sales report analyst. You will receive a pre-aggregated AB4 sales summary.
-Using the provided summary data, generate a clear, well-structured markdown report that includes:
-
-1. An overview section with key metrics (unique patients, total services, total revenue, number of doctors).
-2. A breakdown table of services/tests by Department.
-3. A referring doctors table in descending order by revenue: Doctor | No. of Patients | No. of Services | Total Amount (₦).
-4. A top services/tests table by revenue: Service | Count | Total Amount (₦).
-5. A written summary and analysis of AB4 sales performance.
-
-Use only the numbers provided — do not invent or estimate any figures.
-Use markdown formatting for all tables and sections.
-Format all monetary amounts with the ₦ symbol and comma separators (e.g. ₦181,500).`;
+const ANALYSIS_PROMPT = `You are a sales report analyst. Based on the data summary below, write ONLY a short written analysis (3-5 paragraphs).
+Do not produce any tables or lists — just the analysis text. Focus on performance highlights, top doctors, top departments, and opportunities.`;
 
 class ReportService {
   async generateFromFile(file, prompt) {
@@ -29,6 +20,49 @@ class ReportService {
   async generateFromGoogleSheet(url, prompt) {
     const rawData = await parseGoogleSheet(url);
     return this.#generate(rawData, prompt);
+  }
+
+  async generateFromTemplate(templateFile, dataFile, prompt) {
+    const rawData = await this.#parseFile(dataFile);
+    const payor   = this.#detectPayor(rawData, prompt || '');
+    const agg     = this.#aggregate(rawData, payor);
+
+    const metrics = {
+      doctorsReferred: Object.keys(agg.doctors).length,
+      patients:        agg.patients.size,
+      business:        agg.totalRevenue,
+      services:        agg.services,
+      departments:     agg.departments,
+      doctors:         agg.doctors,
+    };
+
+    // Auto-detect which month the template belongs to (e.g. 'february') — must come first
+    const oldMonth = await detectTemplateMonth(templateFile.buffer);
+
+    // Parse new month + year from prompt e.g. "March 2026"
+    const MONTH_NAMES_LIST = [
+      'january','february','march','april','may','june',
+      'july','august','september','october','november','december',
+    ];
+    const monthMatch = (prompt || '').match(
+      /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i
+    );
+    const yearMatch = (prompt || '').match(/\b(20\d{2})\b/);
+
+    // If no month in prompt, default to the month AFTER the template's detected month
+    let newMonth;
+    if (monthMatch) {
+      newMonth = monthMatch[1].toLowerCase();
+    } else if (oldMonth) {
+      const idx = MONTH_NAMES_LIST.indexOf(oldMonth.toLowerCase());
+      newMonth = MONTH_NAMES_LIST[(idx + 1) % 12];
+    } else {
+      newMonth = MONTH_NAMES_LIST[new Date().getMonth()];
+    }
+
+    const newYear = yearMatch ? yearMatch[1] : String(new Date().getFullYear());
+
+    return fillTemplate(templateFile.buffer, metrics, oldMonth, newMonth, newYear);
   }
 
   async getReport(id) {
@@ -66,7 +100,27 @@ class ReportService {
     return result;
   }
 
-  #aggregateAB4Data(rawData) {
+  #detectPayor(rawData, prompt) {
+    const fromPrompt = prompt.match(/\b([A-Z]{2}\d+)\b/i);
+    if (fromPrompt) return fromPrompt[1].toUpperCase();
+
+    const counts = {};
+    for (const line of rawData.split('\n')) {
+      const cols = this.#parseCSVLine(line);
+      for (const col of cols) {
+        const val = col.trim().toUpperCase();
+        if (/^[A-Z]{2}\d+$/.test(val)) counts[val] = (counts[val] || 0) + 1;
+      }
+    }
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    return sorted[0]?.[0] || null;
+  }
+
+  #fmt(n) {
+    return `₦${Number(n).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
+  #aggregate(rawData, payor) {
     const lines = rawData.split('\n').filter((l) => l.trim());
 
     const patients = new Set();
@@ -74,25 +128,29 @@ class ReportService {
     const departments = {};
     const services = {};
     let totalRevenue = 0;
-    let totalServices = 0;
 
     for (const line of lines) {
       const cols = this.#parseCSVLine(line);
-      const ab4Idx = cols.findIndex((c) => c.trim().toUpperCase() === 'AB4');
-      if (ab4Idx === -1) continue;
+      const payorIdx = payor
+        ? cols.findIndex((c) => c.trim().toUpperCase() === payor)
+        : cols.findIndex((c) => /^[A-Z]{2}\d+$/.test(c.trim().toUpperCase()));
+      if (payorIdx === -1) continue;
 
       const patient = cols[0]?.trim();
       const department = cols[1]?.trim().toUpperCase();
       const doctor = cols[2]?.trim();
-      const service = cols[ab4Idx + 2]?.trim();
+      const service = cols[payorIdx + 2]?.trim();
       const amountRaw = cols[cols.length - 1]?.trim().replace(/[,₦\s]/g, '');
       const amount = parseFloat(amountRaw) || 0;
 
       if (patient) patients.add(patient);
       totalRevenue += amount;
-      totalServices++;
 
-      if (department) departments[department] = (departments[department] || 0) + 1;
+      if (department) {
+        if (!departments[department]) departments[department] = { count: 0, revenue: 0 };
+        departments[department].count++;
+        departments[department].revenue += amount;
+      }
 
       if (doctor) {
         if (!doctors[doctor]) doctors[doctor] = { patients: new Set(), services: 0, revenue: 0 };
@@ -102,66 +160,84 @@ class ReportService {
       }
 
       if (service) {
-        if (!services[service]) services[service] = { count: 0, revenue: 0 };
+        if (!services[service]) services[service] = { count: 0, revenue: 0, dept: department };
         services[service].count++;
         services[service].revenue += amount;
       }
     }
 
-    const fmt = (n) => `₦${n.toLocaleString('en-NG')}`;
+    return { patients, doctors, departments, services, totalRevenue };
+  }
 
-    const deptRows = Object.entries(departments)
-      .sort((a, b) => b[1] - a[1])
-      .map(([dept, count]) => `${dept} | ${count}`)
-      .join('\n');
+  #buildMarkdown(payor, data) {
+    const { patients, doctors, departments, services, totalRevenue } = data;
+    const fmt = this.#fmt.bind(this);
+    const lines = [];
 
-    const doctorRows = Object.entries(doctors)
+    // Overview
+    lines.push('## Overview');
+    lines.push(`- **Payor:** ${payor || 'ALL'}`);
+    lines.push(`- **Unique Patients:** ${patients.size}`);
+    lines.push(`- **Total Revenue:** ${fmt(totalRevenue)}`);
+    lines.push(`- **Unique Doctors:** ${Object.keys(doctors).length}`);
+    lines.push('');
+
+    // Department breakdown
+    lines.push('## Breakdown by Department');
+    lines.push('| Department | No. of Tests | Business Value (₦) |');
+    lines.push('|---|---|---|');
+    Object.entries(departments)
       .sort((a, b) => b[1].revenue - a[1].revenue)
-      .map(([name, d]) => `${name} | ${d.patients.size} | ${d.services} | ${fmt(d.revenue)}`)
-      .join('\n');
+      .forEach(([dept, d]) => {
+        lines.push(`| ${dept} | ${d.count} | ${fmt(d.revenue)} |`);
+      });
+    lines.push('');
 
-    const serviceRows = Object.entries(services)
+    // Laboratory section
+    const labEntries = Object.entries(services).filter(([, s]) => s.dept === 'LABORATORY');
+    const labTotal = labEntries.reduce((acc, [, s]) => ({ count: acc.count + s.count, revenue: acc.revenue + s.revenue }), { count: 0, revenue: 0 });
+
+    lines.push('## Laboratory Tests');
+    lines.push(`**Total Laboratory Revenue:** ${fmt(labTotal.revenue)}`);
+    lines.push('');
+
+    // Doctors
+    lines.push('## Referring Doctors');
+    lines.push('| Doctor | No. of Patients | No. of Services | Total Amount (₦) |');
+    lines.push('|---|---|---|---|');
+    Object.entries(doctors)
       .sort((a, b) => b[1].revenue - a[1].revenue)
-      .slice(0, 10)
-      .map(([svc, s]) => `${svc} | ${s.count} | ${fmt(s.revenue)}`)
-      .join('\n');
+      .forEach(([name, d]) => {
+        lines.push(`| ${name} | ${d.patients.size} | ${d.services} | ${fmt(d.revenue)} |`);
+      });
+    lines.push('');
 
-    return `AB4 AGGREGATED SUMMARY
-- Unique patients: ${patients.size}
-- Total services: ${totalServices}
-- Total revenue: ${fmt(totalRevenue)}
-- Unique doctors: ${Object.keys(doctors).length}
-
-DEPARTMENTS (Dept | Count):
-${deptRows}
-
-DOCTORS (Doctor | Patients | Services | Revenue):
-${doctorRows}
-
-TOP SERVICES (Service | Count | Revenue):
-${serviceRows}`;
+    return lines.join('\n');
   }
 
   async #generate(rawData, prompt) {
     if (!prompt) throw new Error('prompt is required');
 
-    const aggregatedSummary = this.#aggregateAB4Data(rawData);
+    const payor = this.#detectPayor(rawData, prompt);
+    const data = this.#aggregate(rawData, payor);
+    const tables = this.#buildMarkdown(payor, data);
 
+    // Ask AI only for the written analysis
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: ANALYSIS_PROMPT },
         {
           role: 'user',
-          content: `Here is the AB4 aggregated sales summary:\n\n${aggregatedSummary}\n\nGenerate a report that covers: ${prompt}`,
+          content: `Payor: ${payor || 'ALL'} | Patients: ${data.patients.size} | Revenue: ${data.totalRevenue} | Doctors: ${Object.keys(data.doctors).length}\nTop doctor: ${Object.entries(data.doctors).sort((a,b) => b[1].revenue - a[1].revenue)[0]?.[0]}\nTop department: ${Object.entries(data.departments).sort((a,b) => b[1].revenue - a[1].revenue)[0]?.[0]}\n\nWrite the analysis.`,
         },
       ],
     });
 
-    const content = completion.choices[0].message.content;
+    const analysis = completion.choices[0].message.content;
+    const content = `${tables}\n## Summary and Analysis\n${analysis}`;
 
     const report = await reportRepository.saveReport(prompt, content);
-
     return { reportId: report.id, content };
   }
 }

@@ -742,6 +742,11 @@
       <div class="nav-icon">📊</div>
       Sales Reports
     </div>
+
+    <div class="nav-item" data-page="slides">
+      <div class="nav-icon">🖼️</div>
+      Fill Slide Template
+    </div>
   </nav>
 
   <button class="new-chat" id="new-chat-btn">
@@ -793,7 +798,7 @@
   <div class="page" id="page-report">
     <div class="topbar">
       <div class="topbar-left">
-        <h1>AB4 Sales Reports</h1>
+        <h1>Sales Reports</h1>
         <p>Upload data and generate AI-powered insights</p>
       </div>
     </div>
@@ -856,6 +861,76 @@
   </div>
 
 </main>
+
+  <!-- ─── Slide Template Page ─── -->
+  <div class="page" id="page-slides">
+    <div class="topbar">
+      <div class="topbar-left">
+        <h1>Fill Slide Template</h1>
+        <p>Upload your previous month's slides + new sales data — get updated slides instantly</p>
+      </div>
+    </div>
+
+    <div class="report-layout">
+      <div class="report-sidebar">
+
+        <div>
+          <div class="section-label">1. Upload Slide Template (.pptx)</div>
+          <div class="drop-zone" id="tpl-drop" onclick="document.getElementById('tpl-input').click()">
+            <div class="dz-icon">🖼️</div>
+            <div class="dz-title">Drop your PPTX template here</div>
+            <div class="dz-sub">e.g. February slides</div>
+            <div class="dz-formats"><span class="fmt-tag">PPTX</span></div>
+          </div>
+          <input type="file" id="tpl-input" accept=".pptx,.ppt" />
+          <div class="file-pill" id="tpl-pill">
+            <span>📑</span>
+            <span class="fp-name" id="tpl-pill-name"></span>
+            <span class="fp-remove" id="tpl-pill-remove">✕</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-label">2. Upload New Sales Data</div>
+          <div class="drop-zone" id="data-drop" onclick="document.getElementById('data-input').click()">
+            <div class="dz-icon">📁</div>
+            <div class="dz-title">Drop your data file here</div>
+            <div class="dz-sub">e.g. March CSV / Excel</div>
+            <div class="dz-formats">
+              <span class="fmt-tag">CSV</span>
+              <span class="fmt-tag">XLSX</span>
+              <span class="fmt-tag">PDF</span>
+            </div>
+          </div>
+          <input type="file" id="data-input" accept=".csv,.xlsx,.xls,.pdf" />
+          <div class="file-pill" id="data-pill">
+            <span>📄</span>
+            <span class="fp-name" id="data-pill-name"></span>
+            <span class="fp-remove" id="data-pill-remove">✕</span>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <div class="section-label">3. New Month (e.g. March 2026)</div>
+          <input class="field-input" type="text" id="tpl-month" placeholder="e.g. March 2026 report" />
+        </div>
+
+        <button class="gen-btn" id="tpl-btn" onclick="fillSlideTemplate()">
+          <div class="spinner"></div>
+          <span class="btn-text">🖼️ Generate Slides</span>
+        </button>
+
+      </div>
+
+      <div class="report-main" id="tpl-main">
+        <div class="empty-state">
+          <div class="empty-icon">🖼️</div>
+          <h3>Ready to fill your template</h3>
+          <p>Upload your previous slides as the template and the new month's sales data. The system will replace the numbers and month names automatically.</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
 <div class="toast" id="toast"></div>
 
@@ -1057,7 +1132,7 @@
         if (!res.ok) throw new Error(data.error || 'Failed');
       }
       renderReport(data.content, data.reportId);
-      toast('Report generated successfully!', 'ok');
+      toast('Report generated!', 'ok');
     } catch (err) {
       toast(err.message || 'Failed to generate report', 'error');
     } finally {
@@ -1102,12 +1177,13 @@
       <div class="report-card">
         <div class="report-card-header">
           <div class="rch-left">
-            <h2>AB4 Sales Report</h2>
+            <h2>Sales Report</h2>
             <p>Generated ${now} &nbsp;·&nbsp; ID: ${reportId.slice(0,8)}…</p>
           </div>
           <div class="rch-right">
             <button class="rch-btn" onclick="copyReport()">📋 Copy</button>
             <button class="rch-btn" onclick="window.print()">🖨️ Print</button>
+            <button class="rch-btn" onclick="exportPptx('${reportId}')">📊 Export PPT</button>
           </div>
         </div>
         <div class="report-card-body">
@@ -1122,6 +1198,109 @@
     if (!el) return;
     navigator.clipboard.writeText(el.innerText)
       .then(() => toast('Report copied to clipboard!', 'ok'));
+  }
+
+  // ── Fill Slide Template ──
+  let tplFile  = null;
+  let dataFile2 = null;
+
+  function setupDrop(dropId, inputId, pillId, pillNameId, pillRemoveId, accept, onFile) {
+    const drop   = document.getElementById(dropId);
+    const input  = document.getElementById(inputId);
+    const pill   = document.getElementById(pillId);
+    const name   = document.getElementById(pillNameId);
+    const remove = document.getElementById(pillRemoveId);
+
+    drop.addEventListener('dragover',  e => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', ()  => drop.classList.remove('over'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault(); drop.classList.remove('over');
+      if (e.dataTransfer.files[0]) setDropFile(e.dataTransfer.files[0]);
+    });
+    input.addEventListener('change', () => { if (input.files[0]) setDropFile(input.files[0]); });
+
+    function setDropFile(file) {
+      onFile(file);
+      name.textContent = file.name;
+      pill.classList.add('show');
+      drop.classList.add('has-file');
+      drop.querySelector('.dz-title').textContent = '✅ ' + file.name;
+    }
+
+    remove.addEventListener('click', e => {
+      e.stopPropagation();
+      onFile(null);
+      input.value = '';
+      pill.classList.remove('show');
+      drop.classList.remove('has-file');
+      drop.querySelector('.dz-title').textContent = drop.dataset.default || 'Drop file here';
+    });
+  }
+
+  setupDrop('tpl-drop',  'tpl-input',  'tpl-pill',  'tpl-pill-name',  'tpl-pill-remove',  '.pptx',
+    f => { tplFile = f; document.getElementById('tpl-drop').dataset.default = 'Drop your PPTX template here'; });
+  setupDrop('data-drop', 'data-input', 'data-pill', 'data-pill-name', 'data-pill-remove', '.csv,.xlsx,.xls,.pdf',
+    f => { dataFile2 = f; document.getElementById('data-drop').dataset.default = 'Drop your data file here'; });
+
+  async function fillSlideTemplate() {
+    if (!tplFile)   { toast('Please upload a PPTX template', 'error'); return; }
+    if (!dataFile2) { toast('Please upload a sales data file', 'error'); return; }
+
+    const btn = document.getElementById('tpl-btn');
+    btn.classList.add('loading');
+    btn.disabled = true;
+
+    try {
+      const form = new FormData();
+      form.append('template', tplFile);
+      form.append('data',     dataFile2);
+      form.append('prompt',   document.getElementById('tpl-month').value.trim());
+
+      const res = await fetch('/api/report/fill-template', { method: 'POST', body: form });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to generate slides');
+      }
+
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `slides-${Date.now()}.pptx`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      document.getElementById('tpl-main').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">✅</div>
+          <h3>Slides downloaded!</h3>
+          <p>Your template has been filled with the new month's data. Check your downloads folder.</p>
+        </div>`;
+      toast('Slides ready!', 'ok');
+    } catch (err) {
+      toast(err.message || 'Failed', 'error');
+    } finally {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+  }
+
+  async function exportPptx(reportId, silent = false) {
+    if (!silent) toast('Generating PowerPoint…');
+    try {
+      const res = await fetch(`/api/report/${reportId}/export/pptx`);
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sales-report-${reportId.slice(0,8)}.pptx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('Report & slides ready!', 'ok');
+    } catch (err) {
+      toast(err.message || 'Slide export failed', 'error');
+    }
   }
 </script>
 </body>

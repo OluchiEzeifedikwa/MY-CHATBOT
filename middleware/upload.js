@@ -2,7 +2,7 @@ import multer from 'multer';
 
 const storage = multer.memoryStorage();
 
-const fileFilter = (_req, file, cb) => {
+const dataFilter = (_req, file, cb) => {
   const allowed = [
     'text/csv',
     'application/vnd.ms-excel',
@@ -16,4 +16,22 @@ const fileFilter = (_req, file, cb) => {
   }
 };
 
-export const upload = multer({ storage, fileFilter });
+const anyFilter = (_req, file, cb) => {
+  const all = [
+    'text/csv',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-powerpoint',
+  ];
+  cb(null, all.includes(file.mimetype));
+};
+
+export const upload = multer({ storage, fileFilter: dataFilter });
+
+// For the template-fill endpoint: accepts two files (template PPTX + data file)
+export const uploadTemplate = multer({ storage, fileFilter: anyFilter }).fields([
+  { name: 'template', maxCount: 1 },
+  { name: 'data',     maxCount: 1 },
+]);

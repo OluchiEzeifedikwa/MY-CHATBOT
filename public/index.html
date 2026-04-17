@@ -1138,29 +1138,65 @@
     btn.classList.add('loading');
     btn.disabled = true;
 
+    let tablesContent = '';
+    let analysisContent = '';
+    let reportId = null;
+
     try {
-      let data;
+      let res;
       if (selectedFile) {
         const form = new FormData();
         form.append('file', selectedFile);
         form.append('prompt', prompt);
-        const res = await fetch('/api/report/upload', { method: 'POST', body: form });
-        data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        res = await fetch('/api/report/upload/stream', { method: 'POST', body: form });
       } else {
-        const res = await fetch('/api/report/google-sheet', {
+        res = await fetch('/api/report/google-sheet/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: sheetUrl, prompt }),
         });
-        data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed');
       }
-      renderReport(data.content, data.reportId);
-      toast('Report generated!', 'ok');
+      if (!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'Failed');
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEvent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            const payload = JSON.parse(line.slice(6));
+            if (currentEvent === 'tables') {
+              tablesContent = payload.content;
+              renderReport(tablesContent, null);
+              btn.classList.remove('loading');
+              btn.disabled = false;
+              toast('Tables ready — generating analysis…');
+            } else if (currentEvent === 'chunk') {
+              analysisContent += payload.content;
+              renderReport(tablesContent + '\n## Summary and Analysis\n' + analysisContent, null);
+            } else if (currentEvent === 'done') {
+              reportId = payload.reportId;
+              renderReport(tablesContent + '\n## Summary and Analysis\n' + analysisContent, reportId);
+              toast('Report generated!', 'ok');
+            } else if (currentEvent === 'error') {
+              throw new Error(payload.message || 'Stream error');
+            }
+          }
+        }
+      }
     } catch (err) {
       toast(err.message || 'Failed to generate report', 'error');
-    } finally {
       btn.classList.remove('loading');
       btn.disabled = false;
     }

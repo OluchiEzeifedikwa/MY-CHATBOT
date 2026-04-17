@@ -25,6 +25,47 @@ class ReportController {
     }
   }
 
+  streamFromFile = async (req, res) => {
+    const { prompt } = req.body;
+    const file = req.file;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const send = (event, data) =>
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+
+    try {
+      await reportService.streamFromFile(file, prompt, send);
+    } catch (err) {
+      send('error', { message: err.message });
+    } finally {
+      res.end();
+    }
+  }
+
+  streamFromGoogleSheet = async (req, res) => {
+    const { url, prompt } = req.body;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const send = (event, data) =>
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+
+    try {
+      await reportService.streamFromGoogleSheet(url, prompt, send);
+    } catch (err) {
+      send('error', { message: err.message });
+    } finally {
+      res.end();
+    }
+  }
+
   getReport = async (req, res, next) => {
     const { id } = req.params;
 

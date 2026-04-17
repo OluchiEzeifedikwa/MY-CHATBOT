@@ -22,6 +22,16 @@ class ReportService {
     return this.#generate(rawData, prompt);
   }
 
+  async streamFromFile(file, prompt, send) {
+    const rawData = await this.#parseFile(file);
+    return this.#generateStream(rawData, prompt, send);
+  }
+
+  async streamFromGoogleSheet(url, prompt, send) {
+    const rawData = await parseGoogleSheet(url);
+    return this.#generateStream(rawData, prompt, send);
+  }
+
   async generateFromTemplate(templateFile, dataFile, prompt) {
     const rawData = await this.#parseFile(dataFile);
     const payor   = this.#detectPayor(rawData, prompt || '');
@@ -323,23 +333,54 @@ class ReportService {
     const data = this.#aggregate(rawData, payor);
     const tables = this.#buildMarkdown(payor, data);
 
-    // Ask AI only for the written analysis
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: ANALYSIS_PROMPT },
-        {
-          role: 'user',
-          content: `Payor: ${payor || 'ALL'} | Patients: ${data.patients.size} | Revenue: ${data.totalRevenue} | Doctors: ${Object.keys(data.doctors).length}\nTop doctor: ${Object.entries(data.doctors).sort((a,b) => b[1].revenue - a[1].revenue)[0]?.[0]}\nTop department: ${Object.entries(data.departments).sort((a,b) => b[1].revenue - a[1].revenue)[0]?.[0]}\n\nWrite the analysis.`,
-        },
+        { role: 'user', content: this.#analysisUserMsg(payor, data) },
       ],
     });
 
     const analysis = completion.choices[0].message.content;
     const content = `${tables}\n## Summary and Analysis\n${analysis}`;
-
     const report = await reportRepository.saveReport(prompt, content);
     return { reportId: report.id, content };
+  }
+
+  async #generateStream(rawData, prompt, send) {
+    if (!prompt) throw new Error('prompt is required');
+
+    const payor  = this.#detectPayor(rawData, prompt);
+    const data   = this.#aggregate(rawData, payor);
+    const tables = this.#buildMarkdown(payor, data);
+
+    // Send tables immediately — no waiting for AI
+    send('tables', { content: tables });
+
+    const stream = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      stream: true,
+      messages: [
+        { role: 'system', content: ANALYSIS_PROMPT },
+        { role: 'user', content: this.#analysisUserMsg(payor, data) },
+      ],
+    });
+
+    let analysis = '';
+    for await (const chunk of stream) {
+      const text = chunk.choices[0]?.delta?.content || '';
+      if (text) { analysis += text; send('chunk', { content: text }); }
+    }
+
+    const content = `${tables}\n## Summary and Analysis\n${analysis}`;
+    const report  = await reportRepository.saveReport(prompt, content);
+    send('done', { reportId: report.id });
+  }
+
+  #analysisUserMsg(payor, data) {
+    const topDoctor = Object.entries(data.doctors).sort((a,b) => b[1].revenue - a[1].revenue)[0]?.[0];
+    const topDept   = Object.entries(data.departments).sort((a,b) => b[1].revenue - a[1].revenue)[0]?.[0];
+    return `Payor: ${payor || 'ALL'} | Patients: ${data.patients.size} | Revenue: ${data.totalRevenue} | Doctors: ${Object.keys(data.doctors).length}\nTop doctor: ${topDoctor}\nTop department: ${topDept}\n\nWrite the analysis.`;
   }
 }
 

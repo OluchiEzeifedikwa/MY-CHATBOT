@@ -6,7 +6,9 @@ const router = express.Router();
 
 router.post('/upload', upload.single('file'), reportController.generateFromFile);
 router.post('/fill-template', uploadTemplate, reportController.generateFromTemplate);
+router.post('/fill-template-from-report', upload.single('template'), reportController.generateFromReportId);
 router.post('/google-sheet', reportController.generateFromGoogleSheet);
+router.get('/', reportController.listReports);
 router.get('/:id/export/pptx', reportController.exportPptx);
 router.get('/:id', reportController.getReport);
 

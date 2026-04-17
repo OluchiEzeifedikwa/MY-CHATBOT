@@ -69,6 +69,75 @@ class ReportService {
     return reportRepository.getReport(id);
   }
 
+  async listReports() {
+    return reportRepository.listReports();
+  }
+
+  async generateFromReportId(templateFile, reportId, prompt) {
+    const report = await reportRepository.getReport(reportId);
+    if (!report) throw new Error('Report not found');
+
+    const metrics = this.#parseReportMetrics(report.content);
+
+    const oldMonth = await detectTemplateMonth(templateFile.buffer);
+
+    const MONTH_NAMES_LIST = [
+      'january','february','march','april','may','june',
+      'july','august','september','october','november','december',
+    ];
+    const monthMatch = (prompt || '').match(
+      /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i
+    );
+    const yearMatch = (prompt || '').match(/\b(20\d{2})\b/);
+
+    let newMonth;
+    if (monthMatch) {
+      newMonth = monthMatch[1].toLowerCase();
+    } else if (oldMonth) {
+      const idx = MONTH_NAMES_LIST.indexOf(oldMonth.toLowerCase());
+      newMonth = MONTH_NAMES_LIST[(idx + 1) % 12];
+    } else {
+      newMonth = MONTH_NAMES_LIST[new Date().getMonth()];
+    }
+    const newYear = yearMatch ? yearMatch[1] : String(new Date().getFullYear());
+
+    return fillTemplate(templateFile.buffer, metrics, oldMonth, newMonth, newYear);
+  }
+
+  #parseReportMetrics(content) {
+    const num = (str) => parseFloat(str.replace(/[,₦\s]/g, '')) || 0;
+
+    // Overview scalars
+    const patients      = parseInt(content.match(/unique patients[^:]*:\s*([\d,]+)/i)?.[1]?.replace(/,/g,'') || '0');
+    const doctorsReferred = parseInt(content.match(/unique doctors[^:]*:\s*([\d,]+)/i)?.[1]?.replace(/,/g,'') || '0');
+    const businessMatch = content.match(/total revenue[^:]*:\s*[₦\s]*([\d,]+)/i);
+    const business      = num(businessMatch?.[1] || '0');
+
+    // Department table  →  | DEPT | count | ₦revenue |
+    const departments = {};
+    const deptSection = content.match(/## Breakdown by Department([\s\S]*?)(?=##|$)/i)?.[1] || '';
+    for (const row of deptSection.matchAll(/\|\s*([^|]+?)\s*\|\s*([\d,]+)\s*\|\s*[₦\s]*([\d,]+(?:\.\d+)?)\s*\|/g)) {
+      const name = row[1].trim().toUpperCase();
+      if (name.startsWith('-') || name.startsWith('DEPARTMENT')) continue;
+      departments[name] = { count: parseInt(row[2].replace(/,/g,'')) || 0, revenue: num(row[3]) };
+    }
+
+    // Referring doctors table  →  | Doctor | patients | services | ₦amount |
+    const doctors = {};
+    const drSection = content.match(/## Referring Doctors([\s\S]*?)(?=##|$)/i)?.[1] || '';
+    for (const row of drSection.matchAll(/\|\s*([^|]+?)\s*\|\s*([\d,]+)\s*\|\s*([\d,]+)\s*\|\s*[₦\s]*([\d,]+(?:\.\d+)?)\s*\|/g)) {
+      const name = row[1].trim();
+      if (name.startsWith('-') || /^doctor/i.test(name)) continue;
+      doctors[name] = {
+        patients: new Set(Array.from({ length: parseInt(row[2]) || 0 }, (_, i) => `p${i}`)),
+        services: parseInt(row[3].replace(/,/g,'')) || 0,
+        revenue:  num(row[4]),
+      };
+    }
+
+    return { patients, doctorsReferred, business, departments, doctors, services: {} };
+  }
+
   #parseFile(file) {
     const { mimetype, buffer } = file;
 
@@ -123,6 +192,24 @@ class ReportService {
   #aggregate(rawData, payor) {
     const lines = rawData.split('\n').filter((l) => l.trim());
 
+    // ── First pass: find the payor column index and service offset once ──
+    let payorColIdx = -1;
+    let serviceOffset = 2; // default: one empty col between payor and service (AB4 layout)
+
+    for (const line of lines) {
+      const cols = this.#parseCSVLine(line);
+      const idx = payor
+        ? cols.findIndex((c) => c.trim().toUpperCase() === payor.toUpperCase())
+        : cols.findIndex((c) => /^[A-Z]{2}\d+$/.test(c.trim().toUpperCase()));
+      if (idx === -1) continue;
+      payorColIdx = idx;
+      // If the column right after the payor is blank or another payor code, service is +2;
+      // otherwise it's already the service name (+1).
+      const next = cols[idx + 1]?.trim() ?? '';
+      serviceOffset = (next === '' || /^[A-Z]{2}\d+$/.test(next.toUpperCase())) ? 2 : 1;
+      break;
+    }
+
     const patients = new Set();
     const doctors = {};
     const departments = {};
@@ -131,19 +218,32 @@ class ReportService {
 
     for (const line of lines) {
       const cols = this.#parseCSVLine(line);
-      const payorIdx = payor
-        ? cols.findIndex((c) => c.trim().toUpperCase() === payor)
-        : cols.findIndex((c) => /^[A-Z]{2}\d+$/.test(c.trim().toUpperCase()));
-      if (payorIdx === -1) continue;
 
-      const patient = cols[0]?.trim();
+      // Filter to rows that belong to this payor
+      let payorIdx;
+      if (payorColIdx !== -1) {
+        const cell = cols[payorColIdx]?.trim().toUpperCase() ?? '';
+        const match = payor ? cell === payor.toUpperCase() : /^[A-Z]{2}\d+$/.test(cell);
+        if (!match) continue;
+        payorIdx = payorColIdx;
+      } else {
+        payorIdx = payor
+          ? cols.findIndex((c) => c.trim().toUpperCase() === payor.toUpperCase())
+          : cols.findIndex((c) => /^[A-Z]{2}\d+$/.test(c.trim().toUpperCase()));
+        if (payorIdx === -1) continue;
+      }
+
+      const patient    = cols[0]?.trim();
       const department = cols[1]?.trim().toUpperCase();
-      const doctor = cols[2]?.trim();
-      const service = cols[payorIdx + 2]?.trim();
-      const amountRaw = cols[cols.length - 1]?.trim().replace(/[,₦\s]/g, '');
-      const amount = parseFloat(amountRaw) || 0;
+      const doctor     = cols[2]?.trim();
+      const service    = cols[payorIdx + serviceOffset]?.trim();
+      const amountRaw  = cols[cols.length - 1]?.trim().replace(/[,₦\s]/g, '');
+      const amount     = parseFloat(amountRaw) || 0;
 
-      if (patient) patients.add(patient);
+      // Skip header rows or rows with no numeric amount
+      if (!patient || !amount) continue;
+
+      patients.add(patient);
       totalRevenue += amount;
 
       if (department) {
@@ -159,7 +259,8 @@ class ReportService {
         doctors[doctor].revenue += amount;
       }
 
-      if (service) {
+      // Ignore services that look like numbers (mis-read column)
+      if (service && !/^\d/.test(service)) {
         if (!services[service]) services[service] = { count: 0, revenue: 0, dept: department };
         services[service].count++;
         services[service].revenue += amount;

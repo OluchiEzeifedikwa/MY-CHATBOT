@@ -11,6 +11,14 @@ class ReportRepository {
   async getReport(id) {
     return prisma.report.findUnique({ where: { id } });
   }
+
+  async listReports(limit = 20) {
+    return prisma.report.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: { id: true, prompt: true, createdAt: true },
+    });
+  }
 }
 
 export default new ReportRepository();

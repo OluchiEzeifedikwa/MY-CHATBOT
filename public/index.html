@@ -495,6 +495,18 @@
       padding: 3px 8px; border-radius: 5px;
     }
 
+    .src-tab {
+      flex: 1; padding: 8px 0; font-size: 13px; font-weight: 600;
+      background: rgba(255,255,255,.04); border: 1px solid var(--border);
+      color: var(--muted); border-radius: var(--radius-sm); cursor: pointer;
+      transition: all .15s;
+    }
+    .src-tab:hover { color: var(--text); background: rgba(255,255,255,.07); }
+    .src-tab.active {
+      background: rgba(99,102,241,.15); border-color: var(--indigo);
+      color: var(--indigo);
+    }
+
     .file-pill {
       display: none; align-items: center; gap: 10px;
       background: #0a1f12; border: 1px solid #166534;
@@ -867,7 +879,7 @@
     <div class="topbar">
       <div class="topbar-left">
         <h1>Fill Slide Template</h1>
-        <p>Upload your previous month's slides + new sales data — get updated slides instantly</p>
+        <p>Upload your previous month's slides and choose a data source — get updated slides instantly</p>
       </div>
     </div>
 
@@ -891,22 +903,35 @@
         </div>
 
         <div>
-          <div class="section-label">2. Upload New Sales Data</div>
-          <div class="drop-zone" id="data-drop" onclick="document.getElementById('data-input').click()">
-            <div class="dz-icon">📁</div>
-            <div class="dz-title">Drop your data file here</div>
-            <div class="dz-sub">e.g. March CSV / Excel</div>
-            <div class="dz-formats">
-              <span class="fmt-tag">CSV</span>
-              <span class="fmt-tag">XLSX</span>
-              <span class="fmt-tag">PDF</span>
+          <div class="section-label">2. Data Source</div>
+          <div style="display:flex;gap:8px;margin-bottom:12px;">
+            <button class="src-tab active" id="src-tab-file" onclick="switchSrcTab('file')">Upload File</button>
+            <button class="src-tab" id="src-tab-report" onclick="switchSrcTab('report')">Saved Report</button>
+          </div>
+
+          <div id="src-panel-file">
+            <div class="drop-zone" id="data-drop" onclick="document.getElementById('data-input').click()">
+              <div class="dz-icon">📁</div>
+              <div class="dz-title">Drop your data file here</div>
+              <div class="dz-sub">e.g. March CSV / Excel</div>
+              <div class="dz-formats">
+                <span class="fmt-tag">CSV</span>
+                <span class="fmt-tag">XLSX</span>
+                <span class="fmt-tag">PDF</span>
+              </div>
+            </div>
+            <input type="file" id="data-input" accept=".csv,.xlsx,.xls,.pdf" />
+            <div class="file-pill" id="data-pill">
+              <span>📄</span>
+              <span class="fp-name" id="data-pill-name"></span>
+              <span class="fp-remove" id="data-pill-remove">✕</span>
             </div>
           </div>
-          <input type="file" id="data-input" accept=".csv,.xlsx,.xls,.pdf" />
-          <div class="file-pill" id="data-pill">
-            <span>📄</span>
-            <span class="fp-name" id="data-pill-name"></span>
-            <span class="fp-remove" id="data-pill-remove">✕</span>
+
+          <div id="src-panel-report" style="display:none;">
+            <select class="field-input" id="saved-report-select" style="width:100%;cursor:pointer;">
+              <option value="">— select a saved report —</option>
+            </select>
           </div>
         </div>
 
@@ -926,7 +951,7 @@
         <div class="empty-state">
           <div class="empty-icon">🖼️</div>
           <h3>Ready to fill your template</h3>
-          <p>Upload your previous slides as the template and the new month's sales data. The system will replace the numbers and month names automatically.</p>
+          <p>Upload your previous slides, then either upload fresh sales data or pick a saved report. The system will replace the numbers and month names automatically.</p>
         </div>
       </div>
     </div>
@@ -1201,8 +1226,40 @@
   }
 
   // ── Fill Slide Template ──
-  let tplFile  = null;
+  let tplFile   = null;
   let dataFile2 = null;
+  let slidesSrcTab = 'file';
+
+  function switchSrcTab(tab) {
+    slidesSrcTab = tab;
+    document.getElementById('src-tab-file').classList.toggle('active', tab === 'file');
+    document.getElementById('src-tab-report').classList.toggle('active', tab === 'report');
+    document.getElementById('src-panel-file').style.display   = tab === 'file'   ? '' : 'none';
+    document.getElementById('src-panel-report').style.display = tab === 'report' ? '' : 'none';
+    if (tab === 'report') loadSavedReports();
+  }
+
+  async function loadSavedReports() {
+    const sel = document.getElementById('saved-report-select');
+    if (sel.options.length > 1) return; // already loaded
+    try {
+      const res = await fetch('/api/report');
+      const reports = await res.json();
+      reports.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        const date = new Date(r.createdAt).toLocaleDateString('en-NG', { day:'numeric', month:'short', year:'numeric' });
+        opt.textContent = `${r.prompt.slice(0, 50)}… (${date})`;
+        sel.appendChild(opt);
+      });
+      if (!reports.length) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'No saved reports yet — generate one first';
+        sel.appendChild(opt);
+      }
+    } catch { toast('Could not load saved reports', 'error'); }
+  }
 
   function setupDrop(dropId, inputId, pillId, pillNameId, pillRemoveId, accept, onFile) {
     const drop   = document.getElementById(dropId);
@@ -1243,20 +1300,32 @@
     f => { dataFile2 = f; document.getElementById('data-drop').dataset.default = 'Drop your data file here'; });
 
   async function fillSlideTemplate() {
-    if (!tplFile)   { toast('Please upload a PPTX template', 'error'); return; }
-    if (!dataFile2) { toast('Please upload a sales data file', 'error'); return; }
+    if (!tplFile) { toast('Please upload a PPTX template', 'error'); return; }
 
-    const btn = document.getElementById('tpl-btn');
+    const btn    = document.getElementById('tpl-btn');
+    const prompt = document.getElementById('tpl-month').value.trim();
     btn.classList.add('loading');
     btn.disabled = true;
 
     try {
-      const form = new FormData();
-      form.append('template', tplFile);
-      form.append('data',     dataFile2);
-      form.append('prompt',   document.getElementById('tpl-month').value.trim());
+      let res;
+      if (slidesSrcTab === 'report') {
+        const reportId = document.getElementById('saved-report-select').value;
+        if (!reportId) { toast('Please select a saved report', 'error'); return; }
+        const form = new FormData();
+        form.append('template', tplFile);
+        form.append('reportId', reportId);
+        form.append('prompt',   prompt);
+        res = await fetch('/api/report/fill-template-from-report', { method: 'POST', body: form });
+      } else {
+        if (!dataFile2) { toast('Please upload a sales data file', 'error'); return; }
+        const form = new FormData();
+        form.append('template', tplFile);
+        form.append('data',     dataFile2);
+        form.append('prompt',   prompt);
+        res = await fetch('/api/report/fill-template', { method: 'POST', body: form });
+      }
 
-      const res = await fetch('/api/report/fill-template', { method: 'POST', body: form });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to generate slides');

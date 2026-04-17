@@ -37,6 +37,33 @@ class ReportController {
     }
   }
 
+  listReports = async (_req, res, next) => {
+    try {
+      const reports = await reportService.listReports();
+      res.json(reports);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  generateFromReportId = async (req, res, next) => {
+    const { reportId, prompt } = req.body;
+    const templateFile = req.file;
+
+    if (!templateFile) return res.status(400).json({ error: 'No template PPTX uploaded' });
+    if (!reportId)     return res.status(400).json({ error: 'No reportId provided' });
+
+    try {
+      const buffer = await reportService.generateFromReportId(templateFile, reportId, prompt);
+      const filename = `slides-${Date.now()}.pptx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(buffer);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   generateFromTemplate = async (req, res, next) => {
     const { prompt } = req.body;
     const templateFile = req.files?.template?.[0];

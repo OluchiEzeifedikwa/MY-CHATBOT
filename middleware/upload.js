@@ -35,3 +35,17 @@ export const uploadTemplate = multer({ storage, fileFilter: anyFilter }).fields(
   { name: 'template', maxCount: 1 },
   { name: 'data',     maxCount: 1 },
 ]);
+
+// For fill-template-from-report: accepts PPTX template only
+const pptxFilter = (_req, file, cb) => {
+  const allowed = [
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-powerpoint',
+  ];
+  if (allowed.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Unsupported file type. Upload a PPTX file.'));
+  }
+};
+export const uploadPptx = multer({ storage, fileFilter: pptxFilter });

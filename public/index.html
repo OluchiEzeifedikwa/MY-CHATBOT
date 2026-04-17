@@ -1239,12 +1239,12 @@
         <div class="report-card-header">
           <div class="rch-left">
             <h2>Sales Report</h2>
-            <p>Generated ${now} &nbsp;·&nbsp; ID: ${reportId.slice(0,8)}…</p>
+            <p>Generated ${now}${reportId ? ` &nbsp;·&nbsp; ID: ${reportId.slice(0,8)}…` : ''}</p>
           </div>
           <div class="rch-right">
             <button class="rch-btn" onclick="copyReport()">📋 Copy</button>
             <button class="rch-btn" onclick="window.print()">🖨️ Print</button>
-            <button class="rch-btn" onclick="exportPptx('${reportId}')">📊 Export PPT</button>
+            ${reportId ? `<button class="rch-btn" onclick="exportPptx('${reportId}')">📊 Export PPT</button>` : ''}
           </div>
         </div>
         <div class="report-card-body">

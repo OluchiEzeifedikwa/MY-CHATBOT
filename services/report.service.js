@@ -4,7 +4,7 @@ import { parseCSV } from '../lib/parsers/csv.parser.js';
 import { parseExcel } from '../lib/parsers/excel.parser.js';
 import { parsePDF } from '../lib/parsers/pdf.parser.js';
 import { parseGoogleSheet } from '../lib/parsers/googlesheet.parser.js';
-import { fillTemplate, detectTemplateMonth } from '../lib/pptxTemplateEngine.js';
+import { fillTemplate, detectTemplateMonth, DEPT_MAP } from '../lib/pptxTemplateEngine.js';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -244,7 +244,8 @@ class ReportService {
       }
 
       const patient    = cols[0]?.trim();
-      const department = cols[1]?.trim().toUpperCase();
+      const rawDept    = cols[1]?.trim().toUpperCase();
+      const department = DEPT_MAP[rawDept] || rawDept; // normalize to canonical name
       const doctor     = cols[2]?.trim();
       const service    = cols[payorIdx + serviceOffset]?.trim();
       const amountRaw  = cols[cols.length - 1]?.trim().replace(/[,₦\s]/g, '');
@@ -271,9 +272,10 @@ class ReportService {
 
       // Ignore services that look like numbers (mis-read column)
       if (service && !/^\d/.test(service)) {
-        if (!services[service]) services[service] = { count: 0, revenue: 0, dept: department };
-        services[service].count++;
-        services[service].revenue += amount;
+        const svcKey = service.toUpperCase();
+        if (!services[svcKey]) services[svcKey] = { count: 0, revenue: 0, dept: department };
+        services[svcKey].count++;
+        services[svcKey].revenue += amount;
       }
     }
 
